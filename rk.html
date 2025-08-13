@@ -1,0 +1,288 @@
+<!doctype html>
+<html lang='en'>
+<head>
+  <meta charset='utf-8' />
+  <meta name='viewport' content='width=device-width, initial-scale=1' />
+  <title>Ruth — A Journey Through the Stars</title>
+  <link href='https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800&family=Lora:wght@400;700&display=swap' rel='stylesheet'>
+  <style>
+    :root{
+      --bg-deep:#0b0620;
+      --indigo:#1b0f3b;
+      --neon-pink:#ff4db6;
+      --neon-cyan:#35e0ff;
+      --glass: rgba(255,255,255,0.04);
+      --card-shadow: 0 6px 30px rgba(0,0,0,0.6);
+    }
+    html,body{height:100%;margin:0;font-family:Inter,system-ui,Arial;background:linear-gradient(180deg,var(--indigo) 0%, var(--bg-deep) 60%);color:#e9e9f1;overflow:hidden}
+    #app{position:fixed;inset:0;display:flex;align-items:center;justify-content:center}
+    canvas{display:block}
+    .ui{
+      position: absolute;top:24px;left:24px;right:24px;display:flex;justify-content:space-between;align-items:center;pointer-events:none
+    }
+    .brand{pointer-events:auto;background:linear-gradient(90deg,var(--neon-pink),var(--neon-cyan));-webkit-background-clip:text;background-clip:text;color:transparent;font-weight:700;font-size:18px}
+    .controls{pointer-events:auto;display:flex;gap:10px}
+    .btn{background:var(--glass);backdrop-filter:blur(6px);padding:8px 12px;border-radius:12px;border:1px solid rgba(255,255,255,0.04);cursor:pointer;color:inherit;box-shadow:var(--card-shadow)}
+    .btn:active{transform:translateY(1px)}
+    .hint{position:absolute;left:50%;transform:translateX(-50%);bottom:22px;padding:8px 14px;border-radius:20px;background:rgba(0,0,0,0.32);font-size:14px;pointer-events:none}
+    .microcard{position:absolute;right:24px;bottom:24px;max-width:320px;background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));padding:14px;border-radius:14px;border:1px solid rgba(255,255,255,0.03);box-shadow:var(--card-shadow);pointer-events:auto}
+    .microcard h3{margin:0;font-family:Lora,serif;color:var(--neon-pink)}
+    .microcard p{margin:8px 0 0;font-size:13px;color:#dfe6ff}
+    @media (max-width:600px){
+      .microcard{display:none}
+      .brand{font-size:15px}
+    }
+  </style>
+</head>
+<body>
+  <div id='app'>
+    <div class='ui'>
+      <div class='brand'>Ruth — A Journey Through the Stars</div>
+      <div class='controls'>
+        <button class='btn' id='prevBtn'>◀ Prev</button>
+        <button class='btn' id='nextBtn'>Next ▶</button>
+      </div>
+    </div>
+    <div class='hint' id='hint'>Tap/click to begin · Use touch or mouse · Move to explore</div>
+    <div class='microcard' id='microcard'>
+      <h3>Made just for Ruth</h3>
+      <p>Move your finger to grow neon blooms. Release lanterns and connect the stars to reveal a hidden message.</p>
+    </div>
+  </div>
+
+  <script src='https://cdn.jsdelivr.net/npm/p5@1.6.0/lib/p5.min.js'></script>
+
+  <script>
+  const NEON_PINK = '#ff4db6';
+  const NEON_CYAN = '#35e0ff';
+  const messages = [
+    'Her presence lingers like twilight’s gentle embrace, soft and unforgettable.',
+    'A light so rare, it stirs the heart like the first bloom of spring even in the glory of the heavens.',
+    "In every glance, my heart beats like a distant star, drawn to her warmth.",
+    'Her voice, a whisper carried on the breeze, weaving stories only the soul can hear.'
+  ];
+
+  // Poem stanzas for Scene 4
+  const poemStanzas = [
+" In the shadowed labyrinth of my soul,",
+" Where light and darkness wrestle without end,",
+" You dwell—a haunting melody,",
+" A silent voice that calls me back again.",
+
+
+
+" I see your face in every shattered dream,",
+" A specter both cruel and tenderly true,",
+" The weight of love that drowns yet keeps me whole,",
+" A paradox I suffer to pursue.",
+
+" If madness is the price for loving you,",
+" Then gladly shall I pay with every breath—",
+" For in your gaze, I find my cursed peace,",
+" And in your absence, nothingness.",
+  ];
+
+  let poemStartTime = 0;
+
+  let sketch = (p) => {
+    let width, height;
+    let particles = [];
+    let flowers = [];
+    let lanterns = [];
+    let stars = [];
+    let scene = 0;
+    let hintEl, microcard;
+    let connectPoints = [];
+    let connections = [];
+    let currentLine = null;
+    let revealed=false;
+
+    p.setup = () => {
+      width = p.windowWidth; height = p.windowHeight;
+      p.createCanvas(width, height);
+      hintEl = document.getElementById('hint');
+      microcard = document.getElementById('microcard');
+
+      for (let i=0;i<120;i++) stars.push({x: p.random(width), y: p.random(height*0.55), r: p.random(0.6,2.6), a: p.random()});
+
+      let margin = Math.min(width, height) * 0.12;
+      let cx = width*0.5, cy = height*0.45, r = Math.min(width,height)*0.24;
+      for (let i=0;i<7;i++){
+        let ang = -90 + i*50 + p.random(-12,12);
+        let x = cx + Math.cos(ang) * (r + p.random(-20,20));
+        let y = cy + Math.sin(ang) * (r + p.random(-20,20));
+        connectPoints.push({x,y,hit:false});
+      }
+
+      document.getElementById('nextBtn').addEventListener('click', ()=>{ 
+        scene = Math.min(4, scene+1); 
+        hintForScene(); 
+        if(scene===4) poemStartTime = p.millis();
+      });
+      document.getElementById('prevBtn').addEventListener('click', ()=>{ scene = Math.max(0, scene-1); hintForScene(); });
+
+      hintForScene();
+    }
+
+    function hintForScene(){
+      const h = {
+        0:'Tap/click to begin',
+        1:'Move to grow neon blooms · Click to place a memory',
+        2:'Click to release lanterns into the sky',
+        3:'Connect stars by dragging to reveal the name',
+        4:''
+      };
+      hintEl.innerText = h[scene] || '';
+      microcard.style.display = (scene===0? 'block': (window.innerWidth<600? 'none':'block'));
+    }
+
+    p.draw = () => {
+      p.clear();
+      p.background(8,6,32);
+
+      for (let s of stars){
+        let tw = p.sin((p.frameCount*0.6 + s.x*0.01 + s.y*0.01) % 360) * 0.6 + 1;
+        p.noStroke();
+        p.fill(255,255,255, 200*s.a);
+        p.ellipse(s.x, s.y, s.r*tw, s.r*tw);
+      }
+
+      updateParticles();
+
+      if (scene===0) drawIntro();
+      if (scene===1) drawGarden();
+      if (scene===2) drawLanterns();
+      if (scene===3) drawConstellation();
+      if (scene===4) drawPoem();
+    }
+
+    function updateParticles(){
+      if (particles.length < 60 && Math.random() < 0.6) 
+        particles.push({x: p.random(p.width), y: p.random(p.height), vx: p.random(-0.15,0.15), vy: p.random(-0.08,0.08), size: p.random(0.8,2.8), col: (Math.random()<0.5?NEON_PINK:NEON_CYAN)});
+      for (let i=particles.length-1;i>=0;i--){
+        let pt = particles[i];
+        pt.x += pt.vx; pt.y += pt.vy;
+        p.noStroke(); p.fill(pt.col + '30');
+        p.ellipse(pt.x,pt.y,pt.size*2,pt.size*2);
+        if (pt.x < -20 || pt.x > p.width+20 || pt.y < -20 || pt.y > p.height+20) particles.splice(i,1);
+      }
+    }
+
+    function drawIntro(){
+      p.push();
+      p.textAlign(p.CENTER);
+      p.textFont('Lora');
+      p.fill(255,255,255,180);
+      p.textSize(Math.min(32, p.width*0.04));
+      p.text('Ruth — A Journey Through the Stars', p.width*0.5, p.height*0.42);
+      p.textSize(14);
+      p.fill(200,200,255,150);
+      p.text('Click or tap to start', p.width*0.5, p.height*0.5);
+      p.pop();
+    }
+
+    function drawGarden(){
+      for (let i=flowers.length-1;i>=0;i--){
+        let f = flowers[i];
+        f.age += 1;
+        let size = Math.min(1, f.age/22) * f.targetSize;
+        drawNeonFlower(f.x,f.y,size);
+        if (f.age < 120 && f.msg){
+          p.push(); p.textAlign(p.CENTER); p.textSize(14); p.noStroke();
+          p.fill(255,255,255, Math.max(0, 220 - f.age*1.7));
+          p.text(f.msg, f.x, f.y - size - 18);
+          p.pop();
+        }
+        if (f.age > 900) flowers.splice(i,1);
+      }
+    }
+
+    function drawNeonFlower(x,y,size){
+      p.push();
+      p.translate(x,y);
+      for (let g=8;g>0;g--){ p.fill(255,100,200, 14); p.ellipse(0,0,size + g*8, size + g*8); }
+      p.rotate(p.frameCount*0.4);
+      for (let i=0;i<6;i++){
+        p.push(); p.rotate(i*60); p.fill(255,200,255,230); p.ellipse(size*0.5,0,size*0.9,size*0.32); p.pop();
+      }
+      p.fill(255,245,180); p.ellipse(0,0,size*0.6,size*0.6);
+      p.pop();
+    }
+
+    function drawLanterns(){
+      for (let i=lanterns.length-1;i>=0;i--){
+        let L = lanterns[i];
+        L.x += L.vx; L.y += L.vy; L.vy -= 0.004; L.vx *= 0.998;
+        p.push(); p.translate(L.x,L.y);
+        p.fill(255,240,200,200);
+        p.ellipse(0,0, L.size*0.8, L.size);
+        p.fill(255,120,200,120); p.ellipse(0,-L.size*0.06, L.size*0.6, L.size*0.6);
+        p.pop();
+        if (L.y < -40 || lanterns.length>80) lanterns.splice(i,1);
+      }
+    }
+
+    function drawConstellation(){
+      for (let i=0;i<connectPoints.length;i++){
+        let c = connectPoints[i];
+        p.fill(255,255,255,200); p.noStroke(); p.ellipse(c.x,c.y, c.hit?14:8);
+      }
+      p.stroke(200,200,255,180); p.strokeWeight(2);
+      for (let c of connections){ p.line(c.x1,c.y1,c.x2,c.y2); }
+      if (currentLine){ p.stroke(255,220,200,140); p.line(currentLine.x1,currentLine.y1, currentLine.x2,currentLine.y2); }
+      if (connectPoints.every(p=>p.hit) && !revealed){
+        revealed = true;
+        setTimeout(()=>{ scene = 4; poemStartTime = p.millis(); }, 1500);
+      }
+    }
+
+    function drawPoem(){
+      p.push();
+      p.textAlign(p.CENTER);
+      p.textFont('Lora');
+      let elapsed = p.millis() - poemStartTime;
+      let stanzaDelay = 2000;
+      let lineSpacing = 40;
+
+      for (let i = 0; i < poemStanzas.length; i++) {
+        let appearTime = i * stanzaDelay;
+        if (elapsed > appearTime) {
+          let alpha = Math.min(255, (elapsed - appearTime) / 1000 * 255);
+          p.fill(255,240,220, alpha);
+          let offsetFromCurrent = i - Math.floor(elapsed / stanzaDelay);
+          let yPos = p.height / 2 + offsetFromCurrent * lineSpacing;
+          p.textSize(20);
+          p.text(poemStanzas[i], p.width / 2, yPos, p.width * 0.4);
+        }
+      }
+      p.pop();
+    }
+
+    p.mousePressed = ()=>{
+      if (scene===0){ scene = 1; hintForScene(); return; }
+      if (scene===1){ flowers.push({x:p.mouseX, y:p.mouseY, age:0, targetSize: 28 + Math.random()*38, msg: messages[Math.floor(Math.random()*messages.length)]}); }
+      if (scene===2){ lanterns.push({x:p.mouseX, y:p.mouseY, vx:(Math.random()-0.5)*0.6, vy:-1.2 - Math.random()*0.6, size: 26 + Math.random()*18}); }
+      if (scene===3){
+        for (let i=0;i<connectPoints.length;i++){
+          let c = connectPoints[i];
+          if (dist(p.mouseX,p.mouseY,c.x,c.y) < 22 && !c.hit){
+            c.hit = true;
+            if (currentLine && !connections.find(cc=>cc.x1===currentLine.x1 && cc.x2===c.x)){
+              connections.push({x1:currentLine.x1,y1:currentLine.y1,x2:c.x,y2:c.y});
+              currentLine = null;
+            } else {
+              currentLine = {x1:c.x,y1:c.y,x2:c.x,y2:c.y};
+            }
+            break;
+          }
+        }
+      }
+    }
+
+    p.mouseDragged = ()=>{ if (scene===3 && currentLine){ currentLine.x2 = p.mouseX; currentLine.y2 = p.mouseY; } }
+    function dist(x1,y1,x2,y2){ return Math.hypot(x1-x2, y1-y2); }
+  }
+  new p5(sketch, document.getElementById('app'));
+  </script>
+</body>
+</html>
